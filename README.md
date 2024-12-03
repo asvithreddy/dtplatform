@@ -1,3 +1,14 @@
+these libraries are required .
+1.@react-three/drei
+2.@react-three/fiber
+3. three
+
+Scene1.js contains the 3d scene management
+scene.js contains code without hirerachy(contains - toggle grid,wireframe, gizmos,custom camera positioning,viewing from 3 different positions)
+
+
+
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
@@ -68,3 +79,10 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+
+
+
+
+
+
