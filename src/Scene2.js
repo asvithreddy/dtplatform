@@ -1,4 +1,11 @@
-import { GizmoHelper, GizmoViewport, OrbitControls, PerspectiveCamera, OrthographicCamera, Grid, Line } from '@react-three/drei';
+import {
+  GizmoHelper,
+  GizmoViewport,
+  OrbitControls,
+  PerspectiveCamera,
+  Grid,
+  Line,
+} from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
 import React, { useState, useRef } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -7,24 +14,32 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 // Draggable Item Type
 const ITEM_TYPE = 'MESH';
 
-// Draggable Component
-function DraggableMesh({ id, position, geometry, material, children, onUpdatePosition }) {
+// Draggable and Droppable Mesh
+function DraggableMesh({ id, position, geometry, material, hierarchy, setHierarchy }) {
   const ref = useRef();
 
+  // Dragging
   const [, drag] = useDrag({
     type: ITEM_TYPE,
     item: { id, type: ITEM_TYPE },
-    end: (item, monitor) => {
-      const dropResult = monitor.getDropResult();
-      if (item && dropResult && onUpdatePosition) {
-        onUpdatePosition(item.id, dropResult.position);
-      }
-    },
   });
 
+  // Dropping
   const [, drop] = useDrop({
     accept: ITEM_TYPE,
-    drop: () => ({ position }),
+    drop: (item) => {
+      if (item.id !== id) {
+        // Update hierarchy: Set dragged item's parent to the current mesh
+        setHierarchy((prev) => {
+          const updatedHierarchy = [...prev];
+          const draggedMesh = updatedHierarchy.find((mesh) => mesh.id === item.id);
+          if (draggedMesh) {
+            draggedMesh.parent = id; // Set new parent
+          }
+          return updatedHierarchy;
+        });
+      }
+    },
   });
 
   drag(drop(ref)); // Combine drag and drop refs
@@ -33,44 +48,7 @@ function DraggableMesh({ id, position, geometry, material, children, onUpdatePos
     <mesh ref={ref} position={position}>
       {geometry}
       {material}
-      {children}
     </mesh>
-  );
-}
-
-// Vehicle Component with Drag-and-Drop
-function Vehicle({ isSolid, isWireframe, onUpdateHierarchy }) {
-  const Material = isSolid ? <meshBasicMaterial /> : <meshStandardMaterial wireframe={isWireframe} />;
-
-  const handleUpdatePosition = (id, newPosition) => {
-    if (onUpdateHierarchy) {
-      onUpdateHierarchy((prev) => {
-        const updatedHierarchy = [...prev];
-        const mesh = updatedHierarchy.find((m) => m.id === id);
-        if (mesh) mesh.position = newPosition;
-        return updatedHierarchy;
-      });
-    }
-  };
-
-  const vehicleMeshes = [
-    { id: 'body', position: [0, 0.5, 0], geometry: <boxGeometry args={[3, 1, 2]} />, material: Material },
-    { id: 'wheel', position: [2, 1, 0], geometry: <sphereGeometry args={[0.5, 32, 32]} />, material: Material },
-  ];
-
-  return (
-    <>
-      {vehicleMeshes.map((mesh) => (
-        <DraggableMesh
-          key={mesh.id}
-          id={mesh.id}
-          position={mesh.position}
-          geometry={mesh.geometry}
-          material={mesh.material}
-          onUpdatePosition={handleUpdatePosition}
-        />
-      ))}
-    </>
   );
 }
 
@@ -86,12 +64,35 @@ function AxisHelpers() {
 }
 
 // Scene Content Component
-function SceneContent({ isSolid, isWireframe, cameraPosition, cameraLookAt, showGrid, isPerspective, hierarchy, onUpdateHierarchy }) {
+function SceneContent({
+  isSolid,
+  isWireframe,
+  cameraPosition,
+  cameraLookAt,
+  showGrid,
+  hierarchy,
+  setHierarchy,
+}) {
+  const Material = isSolid ? <meshBasicMaterial /> : <meshStandardMaterial wireframe={isWireframe} />;
+
   return (
     <>
       <ambientLight intensity={0.5} />
       <directionalLight position={[5, 5, 5]} intensity={1} />
-      <Vehicle isSolid={isSolid} isWireframe={isWireframe} onUpdateHierarchy={onUpdateHierarchy} />
+      {hierarchy.map((mesh) => {
+        const { id, position } = mesh;
+        return (
+          <DraggableMesh
+            key={id}
+            id={id}
+            position={position}
+            geometry={<boxGeometry args={[1, 1, 1]} />}
+            material={Material}
+            hierarchy={hierarchy}
+            setHierarchy={setHierarchy}
+          />
+        );
+      })}
       <GizmoHelper alignment="top-right" margin={[80, 80]}>
         <GizmoViewport />
       </GizmoHelper>
@@ -107,11 +108,7 @@ function SceneContent({ isSolid, isWireframe, cameraPosition, cameraLookAt, show
         />
       )}
       <AxisHelpers />
-      {isPerspective ? (
-        <PerspectiveCamera makeDefault fov={75} position={cameraPosition} near={0.1} far={1000} />
-      ) : (
-        <OrthographicCamera makeDefault position={cameraPosition} zoom={100} near={-1000} far={1000} />
-      )}
+      <PerspectiveCamera makeDefault fov={75} position={cameraPosition} near={0.1} far={1000} />
       <OrbitControls target={cameraLookAt} />
     </>
   );
@@ -124,21 +121,32 @@ function Scene() {
   const [cameraPosition, setCameraPosition] = useState([0, 2, 5]);
   const [cameraLookAt, setCameraLookAt] = useState([0, 0, 0]);
   const [showGrid, setShowGrid] = useState(true);
-  const [isPerspective, setIsPerspective] = useState(true);
+
+  // Hierarchy State
   const [hierarchy, setHierarchy] = useState([
-    { id: 'body', position: [0, 0.5, 0] },
-    { id: 'wheel', position: [2, 1, 0] },
+    { id: 'body', position: [0, 0.5, 0], parent: null },
+    { id: 'wheel1', position: [-1, 0, 1], parent: null },
+    { id: 'wheel2', position: [1, 0, 1], parent: null },
   ]);
 
   const toggleMaterial = () => setIsSolid((prev) => !prev);
   const toggleWireframe = () => setIsWireframe((prev) => !prev);
   const toggleGrid = () => setShowGrid((prev) => !prev);
-  const toggleCameraType = () => setIsPerspective((prev) => !prev);
 
+  // Export Hierarchy to JSON File
   const exportHierarchyToJson = () => {
     const json = JSON.stringify(hierarchy, null, 2);
-    console.log('Hierarchy JSON:', json);
-    alert(`Hierarchy exported to console:\n${json}`);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    // Create a temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'hierarchy.json';
+    link.click();
+
+    // Revoke the object URL to free memory
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -147,9 +155,6 @@ function Scene() {
         <button className="styled-button" onClick={toggleMaterial}>Toggle Solid Mesh</button>
         <button className="styled-button" onClick={toggleWireframe}>Toggle Wireframe</button>
         <button className="styled-button" onClick={toggleGrid}>Toggle Grid</button>
-        <button className="styled-button" onClick={toggleCameraType}>
-          Toggle {isPerspective ? 'Orthographic' : 'Perspective'} View
-        </button>
         <button className="styled-button" onClick={exportHierarchyToJson}>Export Hierarchy</button>
       </div>
 
@@ -160,11 +165,32 @@ function Scene() {
           cameraPosition={cameraPosition}
           cameraLookAt={cameraLookAt}
           showGrid={showGrid}
-          isPerspective={isPerspective}
           hierarchy={hierarchy}
-          onUpdateHierarchy={setHierarchy}
+          setHierarchy={setHierarchy}
         />
       </Canvas>
+
+      <style jsx>{`
+        .styled-button {
+          background-color: #a881af;
+          color: white;
+          border: none;
+          padding: 10px 15px;
+          margin: 5px 0;
+          font-size: 14px;
+          border-radius: 5px;
+          cursor: pointer;
+          transition: background-color 0.3s;
+        }
+
+        .styled-button:hover {
+          background-color: #357ab8;
+        }
+
+        .styled-button:focus {
+          outline: none;
+        }
+      `}</style>
     </DndProvider>
   );
 }
